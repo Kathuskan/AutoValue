@@ -32,7 +32,6 @@ class CarFeatures(BaseModel):
     fuel_type: str
     millage: float
     town: str
-    condition: str
 
 @app.post("/predict")
 def predict_price(car: CarFeatures):

@@ -157,7 +157,6 @@ const BRANDS = ['AUDI','TOYOTA', 'SUZUKI', 'NISSAN', 'HONDA', 'MITSUBISHI', 'PER
 const TOWNS = ['Colombo', 'Gampaha', 'Kurunegala', 'Kandy', 'Matara', 'Malabe', 'Galle', 'Kadawatha', 'Negombo', 'Anuradapura', 'Homagama', 'Dehiwala-Mount-Lavinia', 'Kegalle', 'Panadura', 'Kalutara'];
 const FUEL_TYPES = ['Petrol', 'Diesel', 'Hybrid', 'Electric'];
 const GEARS = ['Automatic', 'Manual'];
-const CONDITIONS = ['USED', 'NEW'];
 const YEARS = Array.from({ length: 35 }, (_, i) => 2024 - i);
 
 function Odometer({ formatted }) {
@@ -204,8 +203,7 @@ export default function App() {
     gear: 'Automatic',
     fuel_type: 'Petrol',
     millage: 80000,
-    town: 'Colombo',
-    condition: 'USED'
+    town: 'Colombo'
   });
 
   const [prediction, setPrediction] = useState(null);
@@ -317,13 +315,6 @@ export default function App() {
               </select>
             </div>
 
-            <div className="vt-field full">
-              <label htmlFor="condition">Condition</label>
-              <select id="condition" name="condition" value={formData.condition} onChange={handleChange} required>
-                {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-
             <div className="vt-perf"><span>Tear along dotted line for estimate</span></div>
 
             <div className="vt-actions">
@@ -340,7 +331,7 @@ export default function App() {
               {prediction != null && (
                 <div className="vt-stub-foot">
                   <span className="vt-ok-dot"></span>
-                  Based on comparable listings across the model's brand, town and condition profile.
+                  Based on comparable listings across the model's brand, town profile, and mathematical correlation.
                 </div>
               )}
               {error && <div className="vt-error">{error}</div>}
