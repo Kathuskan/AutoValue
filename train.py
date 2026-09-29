@@ -11,14 +11,14 @@ from sklearn.base import clone
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
 from sklearn.model_selection import GroupShuffleSplit, GroupKFold
 from backend.features import FEATURES, CATEGORIES, REFERENCE_YEAR, normalize, group_ids, make_pipeline, engine_options
 
 ROOT = Path(__file__).resolve().parent
 DATASET = ROOT / 'data/cars.csv'
-MODEL = ROOT / 'models/vehicle_price.joblib'
+MODEL = ROOT / 'models/selected_six_model.joblib'
 SEED = 42
 COLUMNS = FEATURES + ['Price', 'Date']
 
@@ -48,6 +48,7 @@ def merge_data():
 
 
 def metrics(actual, predicted):
+    """Errors use lakhs; percentage measures use 0–100; R2 is a score."""
     actual, predicted = np.asarray(actual), np.asarray(predicted)
     relative = abs(actual - predicted) / actual
     return {'MAE': float(mean_absolute_error(actual, predicted)),
@@ -65,8 +66,6 @@ def candidates():
         'Ridge regression': Ridge(alpha=10, solver='lsqr'),
         'Decision tree': DecisionTreeRegressor(max_depth=18, min_samples_leaf=4, random_state=SEED),
         'Random forest': RandomForestRegressor(n_estimators=100, max_depth=26, min_samples_leaf=2, n_jobs=2, random_state=SEED),
-        'Extra trees': ExtraTreesRegressor(n_estimators=120, max_depth=28, min_samples_leaf=1, n_jobs=2, random_state=SEED),
-        'Extra trees regularized': ExtraTreesRegressor(n_estimators=80, max_depth=24, min_samples_leaf=2, n_jobs=2, random_state=SEED),
         'Gradient boosting': GradientBoostingRegressor(n_estimators=120, max_depth=3, learning_rate=.06, loss='huber', random_state=SEED),
     }
 
@@ -97,20 +96,29 @@ def train_model(frame):
         pipeline = make_pipeline(estimator, use_mileage=True, use_engine=True)
         scores = validation_scores(pipeline, development, folds)
         score = float(np.mean([s['MAE'] for s in scores]))
-        comparison.append({'Model': name, 'CV MAE': score, 'Fold metrics': scores})
+        # Report every measure on the same folds for a fair comparison.
+        comparison.append({'Model': name,
+                           **{'CV ' + key: float(np.mean([s[key] for s in scores])) for key in scores[0]},
+                           'Fold metrics': scores})
         if score < best_score:
             best, best_score, winner = pipeline, score, name
     tuning = []
-    if winner.startswith('Extra trees') or winner == 'Random forest':
+    if winner == 'Random forest':
         base = clone(best)
         for leaf, fraction in [(1, .7), (2, .7), (3, 1.)]:
             print(f'Tuning {winner}: leaf={leaf}, features={fraction}', flush=True)
             proposal = clone(base).set_params(model__min_samples_leaf=leaf, model__max_features=fraction)
             scores = validation_scores(proposal, development, folds)
             score = float(np.mean([s['MAE'] for s in scores]))
-            tuning.append({'min_samples_leaf': leaf, 'max_features': fraction, 'CV MAE': score})
+            tuning.append({'min_samples_leaf': leaf, 'max_features': fraction,
+                           **{'CV ' + key: float(np.mean([s[key] for s in scores])) for key in scores[0]}})
             if score < best_score:
                 best, best_score = proposal, score
+    # Lock the choice using validation MAE before consulting holdout outcomes.
+    for row in comparison:
+        fitted = make_pipeline(candidates()[row['Model']]).fit(development[FEATURES], development.Price)
+        row.update({'Holdout ' + key: value for key, value in
+                    metrics(holdout.Price, fitted.predict(holdout[FEATURES])).items()})
     best.fit(development[FEATURES], development.Price)
     scores = metrics(holdout.Price, best.predict(holdout[FEATURES]))
     info = {'winner': winner, 'test': scores, 'reference_year': REFERENCE_YEAR,
@@ -140,7 +148,7 @@ def train_model(frame):
     temporary = MODEL.with_suffix('.tmp')
     joblib.dump(bundle, temporary)
     temporary.replace(MODEL)
-    print(pd.DataFrame(comparison)[['Model', 'CV MAE']].sort_values('CV MAE').to_string(index=False), flush=True)
+    print(pd.DataFrame(comparison).drop(columns='Fold metrics').sort_values('CV MAE').to_string(index=False), flush=True)
     print('Selected:', winner, '\nHoldout:', json.dumps(scores, indent=2), flush=True)
     return bundle
 
