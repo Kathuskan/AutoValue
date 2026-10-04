@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from .features import normalize, REFERENCE_YEAR
 
-MODEL_PATH=Path(__file__).resolve().parents[1]/'models/vehicle_price.joblib'
+MODEL_PATH=Path(__file__).resolve().parents[1]/'models/selected_model.joblib'
 FIELDS={'brand':'Brand','model_name':'Model','yom':'YOM','engine_cc':'Engine (cc)',
         'gear':'Gear','fuel_type':'Fuel Type','millage':'Millage(KM)','condition':'Condition'}
 

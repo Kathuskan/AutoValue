@@ -26,15 +26,15 @@ AutoValue/
     raw/car_price_dataset.csv    Untouched original input
     cars.csv                     One merged dataset used for training
   data_collection/               Scraped inputs, cleaner and cleaning notebook
-  notebooks/Complete_workflow.ipynb  Explained cleaning, EDA, features and six-model training
+  notebooks/Complete_workflow.ipynb  Explained cleaning, EDA, features and seven-model training
   backend/
     api.py                       HTTP endpoints and request validation
     predict.py                   Shared prediction and validation logic
     features.py                  Shared training/prediction transformations
-  models/vehicle_price.joblib     Existing website model
-  models/selected_six_model.joblib  Newly selected six-model winner and evaluation metadata
+  models/selected_model.joblib    Selected pipeline used by the website and notebook
+  models/vehicle_price.joblib     Preserved older model
+  models/selected_six_model.joblib  Preserved previous six-model winner
   web/                           HTML, CSS, JavaScript and icon
-  tests/                         Validation and workflow checks
 ```
 
 ## Training
@@ -47,8 +47,10 @@ The same feature columns and supplied mileage values are used for every accepted
 
 The workflow groups similar vehicle specifications to keep profiles separate between training and evaluation. Preprocessing is learned inside each fold. Models are selected using mean MAE over three grouped validation folds; the final model is fitted on development records and evaluated on holdout records. The holdout has been used in earlier experiments and is not an independent external benchmark.
 
-The candidates are Median baseline, Linear regression, Ridge regression, Decision tree, Random forest and Gradient boosting. No Extra Trees models are trained. If Random forest wins, its leaf size and feature fraction are tuned using the same development folds.
+The seven candidates are Median baseline, Linear regression, Ridge regression, Decision tree, Random forest, Extra trees and Gradient boosting. Extra trees starts with 120 trees, maximum depth 28 and minimum leaf size 1. If Random forest or Extra trees wins, its leaf size and feature fraction are tuned using the same development folds. The selected algorithm is determined by validation MAE, not fixed in advance.
 
 Every candidate displays MAE, RMSE, R2, MAPE_pct, Within_10_pct and Within_20_pct for cross-validation and holdout evaluation. MAE and RMSE are in LKR lakhs; MAPE and within-tolerance rates are percentages. Lower errors and higher R2/within-tolerance rates are better. The choice is locked using validation MAE before holdout evaluation; candidate holdout scores are descriptive and do not select the model. The selected-model holdout table includes any winning tuning configuration.
 
-Only the new winner is saved to `models/selected_six_model.joblib`, with comparison, tuning, split indices and evaluation metadata. The existing website model is preserved and its loading path is unchanged. Run `notebooks/Complete_workflow.ipynb` from top to bottom with the `.venv-1` kernel for explanations, code comments, charts and all evaluation measures. `car_valuation.ipynb` loads the new winner for its compact evaluation and prediction demonstration. Raw inputs are not overwritten. No report folder or notebook helper scripts are required.
+Only the new winner is saved to `models/selected_model.joblib`, with preprocessing, selected parameters, comparison, tuning, split indices and evaluation metadata. Saving uses a temporary file, reloads it to verify prediction consistency, and then replaces the selected artifact. Previous model files remain available. The website loads this same selected artifact; restart an already-running server after training to load it.
+
+Run `notebooks/Complete_workflow.ipynb` from top to bottom with the `.venv-1` kernel for explanations, code comments and all evaluation measures. Charts compare every candidate's six CV and holdout measures. Saved-model diagnostics show actual versus predicted prices, residuals versus predictions and the full residual distribution. The notebook reloads the artifact and checks that its holdout metrics reproduce the saved values. Raw inputs are not overwritten.

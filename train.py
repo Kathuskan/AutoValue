@@ -11,14 +11,14 @@ from sklearn.base import clone
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
 from sklearn.model_selection import GroupShuffleSplit, GroupKFold
 from backend.features import FEATURES, CATEGORIES, REFERENCE_YEAR, normalize, group_ids, make_pipeline, engine_options
 
 ROOT = Path(__file__).resolve().parent
 DATASET = ROOT / 'data/cars.csv'
-MODEL = ROOT / 'models/selected_six_model.joblib'
+MODEL = ROOT / 'models/selected_model.joblib'
 SEED = 42
 COLUMNS = FEATURES + ['Price', 'Date']
 
@@ -66,6 +66,7 @@ def candidates():
         'Ridge regression': Ridge(alpha=10, solver='lsqr'),
         'Decision tree': DecisionTreeRegressor(max_depth=18, min_samples_leaf=4, random_state=SEED),
         'Random forest': RandomForestRegressor(n_estimators=100, max_depth=26, min_samples_leaf=2, n_jobs=2, random_state=SEED),
+        'Extra trees': ExtraTreesRegressor(n_estimators=120, max_depth=28, min_samples_leaf=1, n_jobs=2, random_state=SEED),
         'Gradient boosting': GradientBoostingRegressor(n_estimators=120, max_depth=3, learning_rate=.06, loss='huber', random_state=SEED),
     }
 
@@ -103,7 +104,8 @@ def train_model(frame):
         if score < best_score:
             best, best_score, winner = pipeline, score, name
     tuning = []
-    if winner == 'Random forest':
+    # Tune the winning bagged-tree family using development folds only.
+    if winner in {'Random forest', 'Extra trees'}:
         base = clone(best)
         for leaf, fraction in [(1, .7), (2, .7), (3, 1.)]:
             print(f'Tuning {winner}: leaf={leaf}, features={fraction}', flush=True)
@@ -125,6 +127,7 @@ def train_model(frame):
             'date_range': [str(frame.Date.min()), str(frame.Date.max())],
             'use_mileage': True, 'use_engine': True, 'selection_metric': 'Mean MAE over three grouped validation folds',
             'selected_cv_mae': best_score, 'model_comparison': comparison, 'tuning': tuning,
+            'selected_parameters': best.named_steps['model'].get_params(),
             'development_rows': len(development), 'holdout_rows': len(holdout), 'group_overlap': 0,
             'development_indices': fit.tolist(), 'holdout_indices': test.tolist(),
             'seed': SEED, 'price_unit': 'LKR lakhs',
@@ -147,6 +150,10 @@ def train_model(frame):
     MODEL.parent.mkdir(parents=True, exist_ok=True)
     temporary = MODEL.with_suffix('.tmp')
     joblib.dump(bundle, temporary)
+    # Verify that the serialized pipeline reproduces inference before replacement.
+    restored = joblib.load(temporary)
+    np.testing.assert_allclose(best.predict(holdout[FEATURES].iloc[:5]),
+                               restored['pipeline'].predict(holdout[FEATURES].iloc[:5]))
     temporary.replace(MODEL)
     print(pd.DataFrame(comparison).drop(columns='Fold metrics').sort_values('CV MAE').to_string(index=False), flush=True)
     print('Selected:', winner, '\nHoldout:', json.dumps(scores, indent=2), flush=True)
